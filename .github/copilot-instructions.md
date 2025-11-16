@@ -1,91 +1,91 @@
-# AI Agent Instructions
+# AI Agent 使用说明
 
-This is a Next.js 15 fullstack application that implements an AI agent chat interface using LangGraph.js with Model Context Protocol (MCP) server integration and streaming responses.
+这是一个基于 Next.js 15 的全栈应用，使用 LangGraph.js 实现了 AI 智能体聊天界面，集成了模型上下文协议（MCP）服务器和流式响应功能。
 
-## Architecture Overview
+## 架构概览
 
-### Core Agent System
+### 核心智能体系统
 
-- **LangGraph Agent**: Built with `AgentBuilder` class in `src/lib/agent/builder.ts` - creates a StateGraph with agent→tool_approval→tools flow
-- **MCP Integration**: Dynamically loads tools from MCP servers stored in Postgres (`src/lib/agent/mcp.ts`)
-- **Persistent Memory**: Uses LangGraph's Postgres checkpointer for conversation history across sessions
-- **Tool Approval**: Implements human-in-the-loop pattern with interrupts for tool execution approval
+- **LangGraph 智能体**：使用 `src/lib/agent/builder.ts` 中的 `AgentBuilder` 类构建 - 创建 agent→tool_approval→tools 流程的状态图
+- **MCP 集成**：从存储在 Postgres 中的 MCP 服务器动态加载工具（`src/lib/agent/mcp.ts`）
+- **持久化内存**：使用 LangGraph 的 Postgres 检查点器实现跨会话的对话历史记录
+- **工具审批**：实现人机交互模式，通过中断机制进行工具执行审批
 
-### Data Flow
+### 数据流
 
-1. User message → `/api/agent/stream` SSE endpoint → `streamResponse()` in `agentService.ts`
-2. Agent processes with tools from enabled MCP servers → streams incremental responses
-3. Frontend uses `useChatThread()` hook with React Query for optimistic UI and streaming
-4. Thread persistence via Prisma → Postgres (threads + MCP server configs)
+1. 用户消息 → `/api/agent/stream` SSE 端点 → `agentService.ts` 中的 `streamResponse()`
+2. 智能体使用启用的 MCP 服务器中的工具处理 → 流式增量响应
+3. 前端使用带有 React Query 的 `useChatThread()` 钩子实现乐观 UI 和流式更新
+4. 通过 Prisma → Postgres 实现线程持久化（线程 + MCP 服务器配置）
 
-## Essential Development Commands
+## 基本开发命令
 
 ```bash
-# Setup (requires Postgres running on port 5434)
+# 设置（需要在 5434 端口运行 Postgres）
 docker compose up -d
 pnpm install
 pnpm prisma:generate
 pnpm prisma:migrate
 
-# Development
-pnpm dev  # Next.js with Turbopack
-pnpm prisma:studio  # Database UI
+# 开发
+pnpm dev  # 使用 Turbopack 的 Next.js
+pnpm prisma:studio  # 数据库 UI
 
-# Database operations
-pnpm prisma:generate  # After schema changes
-pnpm prisma:migrate   # Create new migrations
+# 数据库操作
+pnpm prisma:generate  # 模式更改后
+pnpm prisma:migrate   # 创建新迁移
 ```
 
-## Project-Specific Patterns
+## 项目特定模式
 
-### Agent Configuration
+### 智能体配置
 
-- **One-time setup**: `ensureAgent()` ensures Postgres checkpointer is initialized before agent creation
-- **Dynamic tool loading**: MCP servers are queried from database on each agent creation
-- **Model flexibility**: Supports switching between OpenAI/Google models via `AgentConfigOptions`
+- **一次性设置**：`ensureAgent()` 确保在创建智能体之前初始化 Postgres 检查点器
+- **动态工具加载**：每次创建智能体时从数据库查询 MCP 服务器
+- **模型灵活性**：通过 `AgentConfigOptions` 支持在 OpenAI/Google 模型之间切换
 
-### Streaming Architecture
+### 流式架构
 
-- **SSE with React Query**: `useChatThread` manages optimistic UI + streaming updates
-- **Message accumulation**: Frontend concatenates text chunks by message ID for smooth UX
-- **Tool approval flow**: Uses Command objects with `resume` action instead of regular inputs
+- **SSE 与 React Query**：`useChatThread` 管理乐观 UI + 流式更新
+- **消息累积**：前端按消息 ID 连接文本块以实现流畅的用户体验
+- **工具审批流程**：使用带有 `resume` 动作的 Command 对象而不是常规输入
 
-### Database Schema Specifics
+### 数据库模式细节
 
-- `MCPServer` model supports both stdio and http MCP server types with conditional fields
-- `Thread` model is minimal - actual conversation history stored in LangGraph checkpoints
-- Use JSON fields (`args`, `env`, `headers`) for flexible MCP server configuration
+- `MCPServer` 模型支持 stdio 和 http 两种 MCP 服务器类型，带有条件字段
+- `Thread` 模型是最小的 - 实际的对话历史记录存储在 LangGraph 检查点中
+- 使用 JSON 字段（`args`、`env`、`headers`）实现灵活的 MCP 服务器配置
 
-### Component Structure
+### 组件结构
 
-- **Context providers**: `ThreadContext` manages active thread, `UISettingsContext` for UI state
-- **Custom hooks**: `useChatThread`, `useMCPTools`, `useThreads` handle specific data domains
-- **Message components**: Separate components for AI/Human/Tool/Error message types with tool call displays
+- **上下文提供器**：`ThreadContext` 管理活动线程，`UISettingsContext` 管理 UI 状态
+- **自定义钩子**：`useChatThread`、`useMCPTools`、`useThreads` 处理特定数据域
+- **消息组件**：AI/人类/工具/错误消息类型的独立组件，带有工具调用显示
 
-### API Route Patterns
+### API 路由模式
 
-- Stream endpoints use `dynamic = "force-dynamic"` and `runtime = "nodejs"`
-- Query params for streaming: `content`, `threadId`, `model`, `allowTool`, `approveAllTools`
-- MCP server CRUD follows REST patterns in `/api/mcp-servers/route.ts`
+- 流式端点使用 `dynamic = "force-dynamic"` 和 `runtime = "nodejs"`
+- 流式查询参数：`content`、`threadId`、`model`、`allowTool`、`approveAllTools`
+- MCP 服务器 CRUD 遵循 `/api/mcp-servers/route.ts` 中的 REST 模式
 
-## Key Integration Points
+## 关键集成点
 
-### MCP Server Management
+### MCP 服务器管理
 
-- Add servers via `MCPServerForm` component → stored in database → loaded dynamically into agent
-- Server configs support environment variables and command arguments for stdio type
-- Tool names are prefixed with server name to prevent conflicts
+- 通过 `MCPServerForm` 组件添加服务器 → 存储在数据库中 → 动态加载到智能体
+- 服务器配置支持 stdio 类型的环境变量和命令参数
+- 工具名称带有服务器名称前缀以防止冲突
 
-### Tool Approval Workflow
+### 工具审批工作流
 
-- Agent pauses at tool calls, emits interrupt with tool details
-- Frontend shows approval UI, sends allowTool=allow/deny parameter
-- Uses Command.resume() pattern instead of new message input
+- 智能体在工具调用时暂停，发出带有工具详情的中断
+- 前端显示审批 UI，发送 allowTool=allow/deny 参数
+- 使用 Command.resume() 模式而不是新消息输入
 
-### Memory System
+### 内存系统
 
-- Thread history retrieved via `getHistory(threadId)` from LangGraph checkpoints
-- Frontend optimistically updates React Query cache during streaming
-- Postgres checkpointer handles concurrent access and persistence
+- 通过 `getHistory(threadId)` 从 LangGraph 检查点检索线程历史
+- 前端在流式传输期间乐观地更新 React Query 缓存
+- Postgres 检查点器处理并发访问和持久化
 
-When modifying the agent system, always run database migrations after schema changes and restart the dev server to pick up new MCP server configurations.
+修改智能体系统时，在模式更改后始终运行数据库迁移，并重新启动开发服务器以获取新的 MCP 服务器配置。
